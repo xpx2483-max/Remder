@@ -4,15 +4,25 @@ import { readDir } from '@tauri-apps/plugin-fs';
 import { FolderOpen, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { join } from '@tauri-apps/api/path';
+import { Dashboard } from './Dashboard';
+import { formatDistanceToNow } from 'date-fns';
 
 export const LibraryView = () => {
-  const { rootPath, files, setRootPath, setFiles, loadNote, initDataService } = useAppStore();
+  const { rootPath, files, fileMetadatas, setRootPath, setFiles, loadNote, initDataService, loadSettings } = useAppStore();
   const [loading, setLoading] = useState(false);
 
-  // Initialize data service on mount
+  // Initialize data service & settings on mount
   useEffect(() => {
     initDataService('mock');
+    loadSettings();
   }, []);
+
+  // Auto-scan if rootPath is loaded from settings
+  useEffect(() => {
+      if (rootPath && files.length === 0) {
+          scanFiles(rootPath);
+      }
+  }, [rootPath]);
 
   const handleOpenFolder = async () => {
     try {
@@ -33,7 +43,6 @@ export const LibraryView = () => {
   const scanFiles = async (path: string) => {
     setLoading(true);
     try {
-      // Quick recursive scan using a helper queue
       const mdFiles: string[] = [];
       const queue = [path];
 
@@ -61,6 +70,16 @@ export const LibraryView = () => {
       setLoading(false);
     }
   };
+
+  // Sort files: Due < Now (Overdue) -> Due Today -> New -> Future
+  const sortedFiles = [...files].sort((a, b) => {
+      const metaA = fileMetadatas[a];
+      const metaB = fileMetadatas[b];
+      const dueA = metaA?.card?.due ? new Date(metaA.card.due).getTime() : 0; // New = 0 (top priority?) or late?
+      const dueB = metaB?.card?.due ? new Date(metaB.card.due).getTime() : 0;
+
+      return dueA - dueB;
+  });
 
   return (
     <div className="h-full flex flex-col p-4 bg-base-200">
@@ -92,28 +111,45 @@ export const LibraryView = () => {
             </div>
           </div>
         ) : (
-            <div className="card bg-base-100 shadow-xl h-full">
-                <div className="card-body p-0">
-                    <ul className="menu w-full rounded-box">
-                        <li className="menu-title p-4 bg-base-200">
-                             <span>Library ({files.length} notes)</span>
-                        </li>
-                        {files.map((file, idx) => (
-                            <li key={idx}>
-                                <a onClick={() => loadNote(file)} className="flex items-center gap-2 py-3">
-                                    <FileText size={16} className="text-secondary" />
-                                    <span className="truncate" title={file}>
-                                        {file.replace(rootPath, '').replace(/^\//, '')}
-                                    </span>
-                                </a>
+            <>
+                <Dashboard />
+
+                <div className="card bg-base-100 shadow-xl h-full">
+                    <div className="card-body p-0">
+                        <ul className="menu w-full rounded-box">
+                            <li className="menu-title p-4 bg-base-200 sticky top-0 z-10 flex justify-between">
+                                <span>Library ({files.length} notes)</span>
                             </li>
-                        ))}
-                        {files.length === 0 && !loading && (
-                            <li className="p-4 text-center text-base-content/50">No markdown files found.</li>
-                        )}
-                    </ul>
+                            {sortedFiles.map((file, idx) => {
+                                const meta = fileMetadatas[file];
+                                const isDue = meta?.card?.due && new Date(meta.card.due) <= new Date();
+                                const isNew = !meta?.card || meta.card.reps === 0;
+
+                                return (
+                                    <li key={idx}>
+                                        <a onClick={() => loadNote(file)} className="flex items-center gap-2 py-3">
+                                            <FileText size={16} className="text-secondary" />
+                                            <span className="truncate flex-1" title={file}>
+                                                {file.replace(rootPath, '').replace(/^\//, '')}
+                                            </span>
+                                            {isNew && <span className="badge badge-sm badge-ghost">New</span>}
+                                            {isDue && !isNew && <span className="badge badge-sm badge-error">Due</span>}
+                                            {!isDue && !isNew && meta?.card?.due && (
+                                                <span className="text-xs opacity-50">
+                                                    {formatDistanceToNow(new Date(meta.card.due), { addSuffix: true })}
+                                                </span>
+                                            )}
+                                        </a>
+                                    </li>
+                                );
+                            })}
+                            {files.length === 0 && !loading && (
+                                <li className="p-4 text-center text-base-content/50">No markdown files found.</li>
+                            )}
+                        </ul>
+                    </div>
                 </div>
-            </div>
+            </>
         )}
       </div>
     </div>

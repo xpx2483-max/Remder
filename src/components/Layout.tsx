@@ -3,9 +3,13 @@ import { LibraryView } from './LibraryView';
 import { NoteRenderer } from './NoteRenderer';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
+import { useKeyboardShortcuts } from './shared/useKeyboardShortcuts';
 
 export const Layout = () => {
   const { viewMode, closeNote } = useAppStore();
+
+  // Initialize Global Shortcuts
+  useKeyboardShortcuts();
 
   return (
     <div className="h-screen w-screen bg-base-300 overflow-hidden flex">
