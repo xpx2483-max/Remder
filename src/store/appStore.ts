@@ -5,7 +5,7 @@ import { SupabaseAdapter } from '../lib/storage/SupabaseAdapter';
 import { parseNote, ParsedNote } from '../lib/markdown/parser';
 import { fsrs } from 'ts-fsrs';
 
-export type ViewMode = 'library' | 'review' | 'test' | 'master' | 'edit';
+export type ViewMode = 'library' | 'review' | 'test' | 'master' | 'edit' | 'summary';
 
 interface AppState {
   dataService: DataService;
@@ -21,6 +21,12 @@ interface AppState {
 
   // Session Queue
   queue: string[];
+  sessionTotal: number;
+  sessionStats: {
+      timeStarted: number;
+      reviewedCount: number;
+      ratings: Record<number, number>;
+  };
   setQueue: (files: string[]) => void;
   startSession: () => void;
 
@@ -46,6 +52,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   files: [],
   fileMetadatas: {},
   queue: [],
+  sessionTotal: 0,
+  sessionStats: { timeStarted: 0, reviewedCount: 0, ratings: {} },
 
   currentFilepath: null,
   currentNote: null,
@@ -101,8 +109,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   startSession: () => {
       const { queue, loadNote } = get();
       if (queue.length > 0) {
+          set({
+              sessionTotal: queue.length,
+              sessionStats: {
+                  timeStarted: Date.now(),
+                  reviewedCount: 0,
+                  ratings: { 1: 0, 2: 0, 3: 0, 4: 0 }
+              }
+          });
           loadNote(queue[0]);
-          set({ viewMode: 'test' }); // Start in Test mode
+          set({ viewMode: 'test' });
       }
   },
 
@@ -128,7 +144,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveReview: async (rating) => {
-    const { currentFilepath, currentMetadata, dataService, queue, loadNote, closeNote, loadAllMetadata } = get();
+    const { currentFilepath, currentMetadata, dataService, queue, loadNote, loadAllMetadata, sessionStats } = get();
     if (!currentFilepath || !currentMetadata) return;
 
     const f = fsrs();
@@ -146,7 +162,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     await dataService.saveReview(currentFilepath, newCard, log);
 
-    // Refresh Metadata in Library view
+    // Update Stats
+    set({
+        sessionStats: {
+            ...sessionStats,
+            reviewedCount: sessionStats.reviewedCount + 1,
+            ratings: {
+                ...sessionStats.ratings,
+                [rating]: (sessionStats.ratings[rating] || 0) + 1
+            }
+        }
+    });
+
+    // Refresh Metadata
     await loadAllMetadata();
 
     // Auto-advance Logic
@@ -156,8 +184,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         await loadNote(nextFile);
         set({ viewMode: 'test' });
     } else if (queue.length > 0) {
-        closeNote();
-        alert("Session Complete!");
+        // End of queue -> Summary Mode
+        set({
+            currentFilepath: null,
+            currentNote: null,
+            viewMode: 'summary'
+        });
     } else {
         set({
             currentMetadata: {
@@ -166,7 +198,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 lastReview: log
             }
         });
-        closeNote();
+        set({ viewMode: 'library' });
     }
   },
 

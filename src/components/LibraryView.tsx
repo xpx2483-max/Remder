@@ -5,7 +5,8 @@ import { FolderOpen, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { join } from '@tauri-apps/api/path';
 import { Dashboard } from './Dashboard';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, isPast, isToday } from 'date-fns';
+import { ThemeController } from './shared/ThemeController';
 
 export const LibraryView = () => {
   const { rootPath, files, fileMetadatas, setRootPath, setFiles, loadNote, initDataService, loadSettings } = useAppStore();
@@ -71,15 +72,23 @@ export const LibraryView = () => {
     }
   };
 
-  // Sort files: Due < Now (Overdue) -> Due Today -> New -> Future
-  const sortedFiles = [...files].sort((a, b) => {
-      const metaA = fileMetadatas[a];
-      const metaB = fileMetadatas[b];
-      const dueA = metaA?.card?.due ? new Date(metaA.card.due).getTime() : 0; // New = 0 (top priority?) or late?
-      const dueB = metaB?.card?.due ? new Date(metaB.card.due).getTime() : 0;
+  // Group files
+  const grouped = files.reduce((acc, file) => {
+      const meta = fileMetadatas[file];
+      const isNew = !meta?.card || meta.card.reps === 0;
+      const dueDate = meta?.card?.due ? new Date(meta.card.due) : null;
 
-      return dueA - dueB;
-  });
+      if (isNew) {
+          acc.new.push(file);
+      } else if (dueDate && isPast(dueDate) && !isToday(dueDate)) {
+          acc.overdue.push(file);
+      } else if (dueDate && isToday(dueDate)) {
+          acc.today.push(file);
+      } else {
+          acc.future.push(file);
+      }
+      return acc;
+  }, { overdue: [] as string[], today: [] as string[], new: [] as string[], future: [] as string[] });
 
   return (
     <div className="h-full flex flex-col p-4 bg-base-200">
@@ -88,14 +97,15 @@ export const LibraryView = () => {
           <a className="btn btn-ghost text-xl">Memory Player</a>
         </div>
         <div className="flex-none gap-2">
-          <button
-            className="btn btn-primary"
-            onClick={handleOpenFolder}
-            disabled={loading}
-          >
-            {loading ? <span className="loading loading-spinner"></span> : <FolderOpen size={18} />}
-            {rootPath ? 'Change Folder' : 'Open Folder'}
-          </button>
+            <ThemeController />
+            <button
+                className="btn btn-primary"
+                onClick={handleOpenFolder}
+                disabled={loading}
+            >
+                {loading ? <span className="loading loading-spinner"></span> : <FolderOpen size={18} />}
+                {rootPath ? 'Change' : 'Open'}
+            </button>
         </div>
       </div>
 
@@ -114,44 +124,50 @@ export const LibraryView = () => {
             <>
                 <Dashboard />
 
-                <div className="card bg-base-100 shadow-xl h-full">
-                    <div className="card-body p-0">
-                        <ul className="menu w-full rounded-box">
-                            <li className="menu-title p-4 bg-base-200 sticky top-0 z-10 flex justify-between">
-                                <span>Library ({files.length} notes)</span>
-                            </li>
-                            {sortedFiles.map((file, idx) => {
-                                const meta = fileMetadatas[file];
-                                const isDue = meta?.card?.due && new Date(meta.card.due) <= new Date();
-                                const isNew = !meta?.card || meta.card.reps === 0;
-
-                                return (
-                                    <li key={idx}>
-                                        <a onClick={() => loadNote(file)} className="flex items-center gap-2 py-3">
-                                            <FileText size={16} className="text-secondary" />
-                                            <span className="truncate flex-1" title={file}>
-                                                {file.replace(rootPath, '').replace(/^\//, '')}
-                                            </span>
-                                            {isNew && <span className="badge badge-sm badge-ghost">New</span>}
-                                            {isDue && !isNew && <span className="badge badge-sm badge-error">Due</span>}
-                                            {!isDue && !isNew && meta?.card?.due && (
-                                                <span className="text-xs opacity-50">
-                                                    {formatDistanceToNow(new Date(meta.card.due), { addSuffix: true })}
-                                                </span>
-                                            )}
-                                        </a>
-                                    </li>
-                                );
-                            })}
-                            {files.length === 0 && !loading && (
-                                <li className="p-4 text-center text-base-content/50">No markdown files found.</li>
-                            )}
-                        </ul>
-                    </div>
+                <div className="space-y-4 pb-20">
+                    <FileSection title="🚨 Overdue" files={grouped.overdue} rootPath={rootPath} loadNote={loadNote} metadatas={fileMetadatas} color="error" />
+                    <FileSection title="📅 Due Today" files={grouped.today} rootPath={rootPath} loadNote={loadNote} metadatas={fileMetadatas} color="warning" />
+                    <FileSection title="🆕 New" files={grouped.new} rootPath={rootPath} loadNote={loadNote} metadatas={fileMetadatas} color="info" />
+                    <FileSection title="💤 Future" files={grouped.future} rootPath={rootPath} loadNote={loadNote} metadatas={fileMetadatas} color="neutral" collapsed />
                 </div>
             </>
         )}
       </div>
     </div>
   );
+};
+
+const FileSection = ({ title, files, rootPath, loadNote, metadatas, color, collapsed = false }: any) => {
+    if (files.length === 0) return null;
+
+    return (
+        <div className="collapse collapse-arrow bg-base-100 shadow-sm">
+            <input type="checkbox" defaultChecked={!collapsed} />
+            <div className={`collapse-title text-xl font-medium text-${color} flex items-center gap-2`}>
+                {title} <span className="badge badge-sm">{files.length}</span>
+            </div>
+            <div className="collapse-content">
+                <ul className="menu w-full p-0">
+                    {files.map((file: string, idx: number) => {
+                         const meta = metadatas[file];
+                         return (
+                            <li key={idx}>
+                                <a onClick={() => loadNote(file)} className="flex items-center gap-2 py-2">
+                                    <FileText size={16} className="opacity-50" />
+                                    <span className="truncate flex-1" title={file}>
+                                        {file.replace(rootPath || '', '').replace(/^\//, '')}
+                                    </span>
+                                    {meta?.card?.due && (
+                                        <span className="text-xs opacity-40">
+                                            {formatDistanceToNow(new Date(meta.card.due), { addSuffix: true })}
+                                        </span>
+                                    )}
+                                </a>
+                            </li>
+                         );
+                    })}
+                </ul>
+            </div>
+        </div>
+    );
 };
