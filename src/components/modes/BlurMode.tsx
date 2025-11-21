@@ -1,6 +1,7 @@
 import { useAppStore } from '../../store/appStore';
 import { useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { MarkdownImage } from '../shared/MarkdownImage';
 
 export const BlurMode = () => {
   const { currentNote } = useAppStore();
@@ -57,7 +58,7 @@ export const BlurMode = () => {
             className="absolute inset-0 filter blur-[6px] select-none pointer-events-none"
             aria-hidden="true"
           >
-             <ReactMarkdown>{cleanContent(currentNote.content)}</ReactMarkdown>
+             <ReactMarkdown components={{ img: MarkdownImage }}>{cleanContent(currentNote.content)}</ReactMarkdown>
           </div>
 
           {/* Reveal Layer (Masked) */}
@@ -68,7 +69,7 @@ export const BlurMode = () => {
                 WebkitMaskImage: 'radial-gradient(circle 80px at var(--x) var(--y), black 0%, transparent 100%)',
             }}
           >
-              <ReactMarkdown>{cleanContent(currentNote.content)}</ReactMarkdown>
+              <ReactMarkdown components={{ img: MarkdownImage }}>{cleanContent(currentNote.content)}</ReactMarkdown>
           </div>
        </div>
     </div>

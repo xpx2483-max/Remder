@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import confetti from 'canvas-confetti';
 import clsx from 'clsx';
+import { MarkdownImage } from '../shared/MarkdownImage';
 
 export const ClozeMode = () => {
   const { currentNote } = useAppStore();
@@ -11,6 +12,13 @@ export const ClozeMode = () => {
   useEffect(() => {
     setRevealed({});
   }, [currentNote]);
+
+  // Listen for global shortcut events
+  useEffect(() => {
+      const handleShortcut = () => revealAll();
+      window.addEventListener('shortcut-reveal', handleShortcut);
+      return () => window.removeEventListener('shortcut-reveal', handleShortcut);
+  }, [currentNote]); // Re-bind if note changes just in case
 
   if (!currentNote) return null;
 
@@ -29,6 +37,7 @@ export const ClozeMode = () => {
   };
 
   const revealAll = () => {
+      if (!currentNote) return;
       const allIds: Record<string, boolean> = {};
       currentNote.clozes.forEach(c => allIds[c.id] = true);
       setRevealed(prev => ({ ...prev, ...allIds }));
@@ -40,12 +49,16 @@ export const ClozeMode = () => {
           <h1 className="font-serif text-4xl m-0">
             {currentNote.frontmatter.title || 'Untitled Note'}
           </h1>
-          <button className="btn btn-sm btn-secondary" onClick={revealAll}>Show All</button>
+          <div className="flex gap-2 items-center">
+              <span className="text-xs opacity-50 hidden lg:inline">Space to Reveal</span>
+              <button className="btn btn-sm btn-secondary" onClick={revealAll}>Show All</button>
+          </div>
        </div>
 
       <div className="font-sans leading-loose">
         <ReactMarkdown
             components={{
+                img: MarkdownImage,
                 a: ({ href, children, title }) => {
                     if (href?.startsWith('cloze:')) {
                         const id = href.split(':')[1];

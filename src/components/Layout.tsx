@@ -2,13 +2,19 @@ import { useAppStore } from '../store/appStore';
 import { LibraryView } from './LibraryView';
 import { NoteRenderer } from './NoteRenderer';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { useKeyboardShortcuts } from './shared/useKeyboardShortcuts';
+import { ToastContainer } from './shared/ToastContainer';
 
 export const Layout = () => {
-  const { viewMode, closeNote } = useAppStore();
+  const { viewMode } = useAppStore();
+
+  // Initialize Global Shortcuts
+  useKeyboardShortcuts();
 
   return (
-    <div className="h-screen w-screen bg-base-300 overflow-hidden flex">
+    <div className="h-screen w-screen bg-base-300 overflow-hidden flex relative">
+       <ToastContainer />
+
        <AnimatePresence mode="wait">
          {viewMode === 'library' ? (
             <motion.div
@@ -28,16 +34,6 @@ export const Layout = () => {
                 exit={{ opacity: 0, x: 20 }}
                 className="w-full h-full relative"
              >
-                 {/* Top Bar for Player */}
-                 <div className="absolute top-0 left-0 right-0 p-2 z-50 flex justify-between pointer-events-none">
-                     <button
-                        className="btn btn-circle btn-ghost pointer-events-auto bg-base-100/50 backdrop-blur"
-                        onClick={closeNote}
-                     >
-                         <X />
-                     </button>
-                 </div>
-
                  <NoteRenderer />
              </motion.div>
          )}

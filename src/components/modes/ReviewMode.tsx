@@ -1,5 +1,6 @@
 import { useAppStore } from '../../store/appStore';
 import ReactMarkdown from 'react-markdown';
+import { MarkdownImage } from '../shared/MarkdownImage';
 
 export const ReviewMode = () => {
   const { currentNote } = useAppStore();
@@ -12,7 +13,11 @@ export const ReviewMode = () => {
         {currentNote.frontmatter.title || 'Untitled Note'}
       </h1>
       <div className="font-sans leading-relaxed opacity-90">
-        <ReactMarkdown>
+        <ReactMarkdown
+          components={{
+            img: MarkdownImage
+          }}
+        >
           {cleanContent(currentNote.content)}
         </ReactMarkdown>
       </div>
